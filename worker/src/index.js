@@ -1,81 +1,51 @@
-// Lure Gank - Cloudflare Worker (WebSocket 实时同步中继)
-// 所有连接的客户端共享同一个 Room，消息实时广播
-
+// Lure Gank - Cloudflare Durable Object WebSocket Relay
 export class Room {
   constructor(state, env) {
-    this.state = state;
+    this.ctx = state;
     this.env = env;
-    this.sessions = new Map();   // WebSocket -> { id }
-    this.timers = new Map();     // id -> { id, name, totalSeconds, startedAt }
+    this.timers = [];
     this.nextId = 1;
+    this.sessions = [];
   }
 
   async fetch(request) {
+    if (request.headers.get("Upgrade") !== "websocket") {
+      return new Response("Lure Gank WS Relay", { headers: { "Content-Type": "text/plain" } });
+    }
     const pair = new WebSocketPair();
-    const [client, server] = Object.values(pair);
-    const sessionId = crypto.randomUUID();
-
-    this.sessions.set(server, { id: sessionId });
-
-    server.accept();
-
-    // 给新客户端发送当前全量数据
-    server.send(JSON.stringify({
-      type: 'sync',
-      timers: Array.from(this.timers.values()),
-    }));
-
-    server.addEventListener('message', (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        const type = msg.type;
-
-        if (type === 'add') {
-          const tid = this.nextId++;
-          const timer = {
-            id: tid,
-            name: msg.name,
-            totalSeconds: msg.totalSeconds,
-            startedAt: Date.now(),
-          };
-          this.timers.set(tid, timer);
-          this.broadcast({ type: 'add', timer });
-        } else if (type === 'delete') {
-          const tid = msg.id;
-          if (this.timers.has(tid)) {
-            this.timers.delete(tid);
-            this.broadcast({ type: 'delete', id: tid });
-          }
-        }
-      } catch (e) {
-        // 忽略无法解析的消息
-      }
-    });
-
-    server.addEventListener('close', () => {
-      this.sessions.delete(server);
-    });
-
-    return new Response(null, { status: 101, webSocket: client });
+    this.ctx.acceptWebSocket(pair[1]);
+    return new Response(null, { status: 101, webSocket: pair[0] });
   }
+
+  async webSocketMessage(ws, raw) {
+    try {
+      const msg = JSON.parse(raw);
+      if (msg.type === "add") {
+        const tid = this.nextId++;
+        const timer = { id: tid, name: msg.name, totalSeconds: msg.totalSeconds, startedAt: Date.now() };
+        this.timers.push(timer);
+        this.broadcast({ type: "add", timer });
+      } else if (msg.type === "delete") {
+        this.timers = this.timers.filter(t => t.id !== msg.id);
+        this.broadcast({ type: "delete", id: msg.id });
+      }
+    } catch(e) {}
+  }
+
+  async webSocketClose(ws, code, reason, wasClean) {}
 
   broadcast(msg) {
     const data = JSON.stringify(msg);
-    for (const [ws] of this.sessions) {
-      try {
-        ws.send(data);
-      } catch (e) {
-        // 忽略发送失败的连接
-      }
+    for (const ws of this.ctx.getWebSockets()) {
+      try { ws.send(data); } catch(e) {}
     }
   }
 }
 
 export default {
   async fetch(request, env) {
-    // 所有 WebSocket 请求路由到同一个 Room 实例
-    const id = env.ROOM.idFromName('lure-gank');
-    const room = env.ROOM.get(id);
-    return room.fetch(request);
+    const id = env.ROOM.idFromName("lobby");
+    const stub = env.ROOM.get(id);
+    return stub.fetch(request);
   },
 };
