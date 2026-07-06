@@ -381,9 +381,6 @@
 </style>
 </head>
 <body>
-<!-- Supabase SDK -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-
 <div class="app">
   <div class="header">
     <h1>Lure Gank</h1>
@@ -419,21 +416,14 @@
 </div>
 
 <script>
-  // ====== Supabase 配置（不填则使用本地模式，不跨设备同步）======
-  const SUPABASE_URL = 'https://jnhmpcawledzveoqkvgy.supabase.co';
-  const SUPABASE_KEY = 'sb_publishable_TpqUvhRKOiS694mKj3v1bQ_mwbpLeqf';
-  // ==========================================================
-
-  let supabase = null;
-  let channel = null;
-  let syncEnabled = false;
-  if (SUPABASE_URL && SUPABASE_KEY) {
-    supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    syncEnabled = true;
-  }
+  // ====== WebSocket 实时同步 ======
+  const WS_PORT = 8765;
+  const wsUrl = `ws://${location.hostname}:${WS_PORT}`;
+  let ws = null;
+  let wsConnected = false;
+  let reconnectTimer = null;
 
   const timers = [];
-  let nextId = Date.now();
 
   const el = {
     inputName: document.getElementById('inputName'),
@@ -443,6 +433,95 @@
     emptyState: document.getElementById('emptyState'),
   };
 
+  // ====== WebSocket 连接管理 ======
+  function connectWS() {
+    if (ws && ws.readyState === WebSocket.OPEN) return;
+    try {
+      ws = new WebSocket(wsUrl);
+    } catch(e) {
+      scheduleReconnect();
+      return;
+    }
+
+    ws.onopen = () => {
+      console.log('🔗 WebSocket 已连接');
+      wsConnected = true;
+      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'sync') {
+          // 全量同步：替换所有 timer
+          timers.length = 0;
+          for (const t of (msg.timers || [])) {
+            timers.push({
+              id: t.id,
+              name: t.name,
+              totalSeconds: t.totalSeconds,
+              remaining: Math.max(0, t.totalSeconds - Math.floor((Date.now() - t.startedAt) / 1000)),
+              _start: t.startedAt,
+              element: null,
+              expired: false,
+            });
+          }
+          renderAll();
+        } else if (msg.type === 'add') {
+          const t = msg.timer;
+          if (timers.find(x => x.id === t.id)) return;
+          timers.push({
+            id: t.id,
+            name: t.name,
+            totalSeconds: t.totalSeconds,
+            remaining: Math.max(0, t.totalSeconds - Math.floor((Date.now() - t.startedAt) / 1000)),
+            _start: t.startedAt,
+            element: null,
+            expired: false,
+          });
+          renderAll();
+        } else if (msg.type === 'delete') {
+          const idx = timers.findIndex(x => x.id === msg.id);
+          if (idx !== -1) {
+            if (timers[idx].element) {
+              timers[idx].element.classList.add('expired');
+              timers[idx].element.addEventListener('animationend', () => {
+                removeTimerById(msg.id);
+              }, { once: true });
+              timers[idx].expired = true;
+            } else {
+              removeTimerById(msg.id);
+            }
+            renderAll();
+          }
+        }
+      } catch(e) { console.error('消息解析失败:', e); }
+    };
+
+    ws.onclose = () => {
+      console.log('🔌 WebSocket 断开，3秒后重连...');
+      wsConnected = false;
+      scheduleReconnect();
+    };
+
+    ws.onerror = () => {}; // onclose 会处理
+  }
+
+  function scheduleReconnect() {
+    if (reconnectTimer) return;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      connectWS();
+    }, 3000);
+  }
+
+  function send(msg) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(msg));
+    }
+  }
+
+  // ====== 核心逻辑 ======
   function formatTime(seconds) {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
@@ -453,32 +532,15 @@
     el.emptyState.style.display = timers.length === 0 ? '' : 'none';
   }
 
-  // ====== 本地模式：添加定时器 ======
-  async function addTimerLocal(name, totalSeconds) {
-    const timer = {
-      id: nextId++,
-      name,
-      totalSeconds,
-      remaining: totalSeconds,
-      element: null,
-      expired: false,
-    };
-    timers.push(timer);
-    renderAll();
+  function removeTimerById(id) {
+    const idx = timers.findIndex(t => t.id === id);
+    if (idx === -1) return;
+    if (timers[idx].element) timers[idx].element.remove();
+    timers.splice(idx, 1);
+    updateEmptyState();
   }
 
-  // ====== 同步模式：添加定时器到 Supabase ======
-  async function addTimerRemote(name, totalSeconds) {
-    if (!supabase) return;
-    const { error } = await supabase.from('timers').insert({
-      name,
-      total_seconds: totalSeconds,
-      started_at: new Date().toISOString(),
-    });
-    if (error) console.error('添加失败:', error);
-  }
-
-  async function addTimer() {
+  function addTimer() {
     const name = el.inputName.value.trim();
     const minutes = parseInt(el.inputMinutes.value, 10) || 0;
     const seconds = parseInt(el.inputSeconds.value, 10) || 0;
@@ -491,47 +553,37 @@
     el.inputSeconds.value = '0';
     el.inputName.focus();
 
-    if (syncEnabled) {
-      await addTimerRemote(name, totalSeconds);
+    if (wsConnected) {
+      send({ type: 'add', name, totalSeconds });
     } else {
-      addTimerLocal(name, totalSeconds);
+      // 离线模式：本地添加
+      timers.push({
+        id: Date.now(), name, totalSeconds,
+        remaining: totalSeconds, _start: Date.now(),
+        element: null, expired: false,
+      });
+      renderAll();
     }
-  }
-
-  // 回车自动添加
-  [el.inputName, el.inputMinutes, el.inputSeconds].forEach(input => {
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); addTimer(); }
-    });
-  });
-
-  // ====== 删除 ======
-  async function deleteTimerRemote(id) {
-    if (!supabase) return;
-    await supabase.from('timers').delete().eq('id', id);
   }
 
   function expireAndRemove(timer) {
     if (timer.expired) return;
     timer.expired = true;
-    if (syncEnabled) {
-      deleteTimerRemote(timer.id);
-    }
+    send({ type: 'delete', id: timer.id });
     timer.element.classList.add('expired');
     timer.element.addEventListener('animationend', () => {
       removeTimerById(timer.id);
     });
   }
 
-  function removeTimerById(id) {
-    const idx = timers.findIndex(t => t.id === id);
-    if (idx === -1) return;
-    if (timers[idx].element) timers[idx].element.remove();
-    timers.splice(idx, 1);
-    updateEmptyState();
-  }
+  // ====== 回车添加 ======
+  [el.inputName, el.inputMinutes, el.inputSeconds].forEach(input => {
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); addTimer(); }
+    });
+  });
 
-  // ====== 卡片创建 ======
+  // ====== 卡片渲染 ======
   function createCard(timer) {
     const card = document.createElement('div');
     card.className = 'timer-card';
@@ -563,8 +615,7 @@
     fg.setAttribute('cx', '22'); fg.setAttribute('cy', '22'); fg.setAttribute('r', '19');
     fg.setAttribute('stroke-dasharray', circumference);
     fg.setAttribute('stroke-dashoffset', '0');
-    svg.appendChild(bg);
-    svg.appendChild(fg);
+    svg.appendChild(bg); svg.appendChild(fg);
     actions.appendChild(svg);
 
     const delBtn = document.createElement('button');
@@ -574,18 +625,13 @@
     delBtn.addEventListener('click', () => expireAndRemove(timer));
     actions.appendChild(delBtn);
 
-    card.appendChild(info);
-    card.appendChild(actions);
-
+    card.appendChild(info); card.appendChild(actions);
     timer.element = card;
-    timer.nameEl = nameEl;
-    timer.timeEl = timeEl;
-    timer.circle = fg;
-    timer.circumference = circumference;
+    timer.nameEl = nameEl; timer.timeEl = timeEl;
+    timer.circle = fg; timer.circumference = circumference;
     return card;
   }
 
-  // ====== 渲染 ======
   function renderAll() {
     const now = Date.now();
     for (const timer of timers) {
@@ -595,7 +641,6 @@
       timer.remaining = Math.max(0, timer.totalSeconds - elapsed);
     }
 
-    // 按剩余时间排序
     timers.sort((a, b) => {
       if (a.expired && !b.expired) return 1;
       if (!a.expired && b.expired) return -1;
@@ -605,15 +650,11 @@
     el.timerList.innerHTML = '';
 
     for (const timer of timers) {
-      if (!timer.element || timer.element.parentNode !== el.timerList) {
-        timer.element = null;
-      }
-
+      if (!timer.element || timer.element.parentNode !== el.timerList) timer.element = null;
       if (timer.expired) {
         if (timer.element) el.timerList.appendChild(timer.element);
         continue;
       }
-
       if (!timer.element) createCard(timer);
 
       timer.timeEl.textContent = formatTime(timer.remaining);
@@ -630,114 +671,28 @@
         timer.expired = true;
         timer.element.classList.remove('warning');
         timer.element.classList.add('expired');
-        if (syncEnabled) deleteTimerRemote(timer.id);
+        send({ type: 'delete', id: timer.id });
         timer.element.addEventListener('animationend', () => {
           const idx = timers.findIndex(t => t.id === timer.id);
           if (idx !== -1) { timers.splice(idx, 1); updateEmptyState(); renderAll(); }
         }, { once: true });
         timer.timeEl.textContent = '00:00';
       }
-
       el.timerList.appendChild(timer.element);
     }
     updateEmptyState();
   }
 
-  // ====== Supabase 实时同步 ======
-  async function initSync() {
-    if (!syncEnabled) return;
-
-    // 加载已有数据
-    let allRows = [];
-    let rangeStart = 0;
-    const pageSize = 1000;
-    while (true) {
-      const { data, error } = await supabase
-        .from('timers')
-        .select('*')
-        .order('started_at', { ascending: true })
-        .range(rangeStart, rangeStart + pageSize - 1);
-      if (error) { console.error('加载失败:', error); break; }
-      if (!data || data.length === 0) break;
-      allRows = allRows.concat(data);
-      if (data.length < pageSize) break;
-      rangeStart += pageSize;
-    }
-
-    // 转换为本地 timer 对象
-    for (const row of allRows) {
-      const elapsed = Math.floor((Date.now() - new Date(row.started_at).getTime()) / 1000);
-      const remaining = Math.max(0, row.total_seconds - elapsed);
-      const timer = {
-        id: row.id,
-        name: row.name,
-        totalSeconds: row.total_seconds,
-        remaining,
-        _start: new Date(row.started_at).getTime(),
-        element: null,
-        expired: remaining <= 0,
-      };
-      timers.push(timer);
-    }
-    renderAll();
-
-    // 订阅实时变更
-    channel = supabase
-      .channel('timers-changes')
-      .on('postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'timers' },
-        (payload) => {
-          const row = payload.new;
-          const elapsed = Math.floor((Date.now() - new Date(row.started_at).getTime()) / 1000);
-          const remaining = Math.max(0, row.total_seconds - elapsed);
-          // 避免重复添加
-          if (timers.find(t => t.id === row.id)) return;
-          timers.push({
-            id: row.id,
-            name: row.name,
-            totalSeconds: row.total_seconds,
-            remaining,
-            _start: new Date(row.started_at).getTime(),
-            element: null,
-            expired: remaining <= 0,
-          });
-          renderAll();
-        }
-      )
-      .on('postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'timers' },
-        (payload) => {
-          const id = payload.old.id;
-          const idx = timers.findIndex(t => t.id === id);
-          if (idx !== -1) {
-            // 如果不是自己触发的过期，也播放动画
-            if (!timers[idx].expired) {
-              timers[idx].expired = true;
-              if (timers[idx].element) {
-                timers[idx].element.classList.add('expired');
-                timers[idx].element.addEventListener('animationend', () => {
-                  removeTimerById(id);
-                }, { once: true });
-              }
-            } else {
-              removeTimerById(id);
-            }
-          }
-          renderAll();
-        }
-      )
-      .subscribe();
+  // ====== 连接状态指示 ======
+  function updateStatusIndicator() {
+    // 简洁处理：连接断开时显示提示
+    // 不做额外的 UI。
   }
 
   // ====== 启动 ======
   setInterval(renderAll, 1000);
-
-  if (syncEnabled) {
-    initSync();
-  } else {
-    renderAll();
-  }
-
+  connectWS();
+  renderAll();
   el.inputName.focus();
 </script>
 </body>
