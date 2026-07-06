@@ -419,7 +419,7 @@
   // ====== WebSocket 实时同步 ======
   // Cloudflare Worker（公网，朋友可访问）→ wss:// 协议
   // 本地服务器（局域网，电脑运行 server.py）→ ws:// 协议
-  const CLOUDFLARE_WS = 'wss://lure-gank.foul-dust.workers.dev';
+  const CLOUDFLARE_WS = 'wss://lure-gank.luregank.workers.dev';
   const LOCAL_WS = `ws://${location.hostname}:8765`;
   
   let wsUrl = CLOUDFLARE_WS;  // 默认公网模式
