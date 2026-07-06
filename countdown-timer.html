@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lure Gank - 白嫖一直爽</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@300;400;500;700&display=swap');
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface-2: #1a1a26;
+    --border: #2a2a3a;
+    --text: #c8c8d4;
+    --text-dim: #6a6a7a;
+    --accent: #00e5ff;
+    --accent-glow: rgba(0, 229, 255, 0.3);
+    --warn: #ff9100;
+    --warn-glow: rgba(255, 145, 0, 0.4);
+    --danger: #ff1744;
+    --danger-glow: rgba(255, 23, 68, 0.5);
+    --success: #00e676;
+    --success-glow: rgba(0, 230, 118, 0.3);
+    --grid-color: rgba(255, 255, 255, 0.03);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Noto Sans SC', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    justify-content: center;
+    padding: clamp(16px, 4vw, 40px) clamp(10px, 3vw, 20px);
+    background-image:
+      linear-gradient(var(--grid-color) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+    background-size: 60px 60px;
+    background-position: center center;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: radial-gradient(ellipse at 50% 0%, rgba(0, 229, 255, 0.04) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 100%, rgba(255, 145, 0, 0.03) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .app {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 600px;
+  }
+
+  /* ── Header ── */
+  .header {
+    text-align: center;
+    margin-bottom: 30px;
+  }
+  .header h1 {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(1.2rem, 5vw, 2.2rem);
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    background: linear-gradient(135deg, var(--accent) 0%, #80f0ff 50%, var(--accent) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+  .header .subtitle {
+    font-size: clamp(0.7rem, 2.5vw, 0.85rem);
+    color: var(--text-dim);
+    letter-spacing: 0.15em;
+    font-weight: 300;
+    padding: 0 10px;
+  }
+
+  /* ── Add Form ── */
+  .add-form {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: clamp(12px, 3vw, 24px);
+    margin-bottom: 28px;
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+  }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+  }
+  .field label {
+    font-size: clamp(0.6rem, 1.8vw, 0.72rem);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .field input {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: clamp(8px, 2vw, 12px) clamp(8px, 2vw, 14px);
+    color: var(--text);
+    font-size: clamp(0.85rem, 2.5vw, 1rem);
+    font-family: 'Orbitron', sans-serif;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    width: 100%;
+  }
+  .field input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+  .field input::placeholder {
+    color: var(--text-dim);
+    font-family: 'Noto Sans SC', sans-serif;
+    font-size: 0.8rem;
+  }
+  .btn-add {
+    background: linear-gradient(135deg, var(--accent), #00b8d4);
+    border: none;
+    border-radius: 8px;
+    padding: 0 clamp(14px, 3vw, 28px);
+    color: #000;
+    font-size: clamp(0.78rem, 2vw, 0.9rem);
+    font-weight: 700;
+    font-family: 'Noto Sans SC', sans-serif;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.2s;
+    white-space: nowrap;
+    height: clamp(36px, 8vw, 44px);
+    flex-shrink: 0;
+  }
+  .btn-add:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 24px var(--accent-glow);
+  }
+  .btn-add:active {
+    transform: translateY(0);
+  }
+
+  /* ── Empty State ── */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-dim);
+  }
+  .empty-state .icon {
+    font-size: 3rem;
+    margin-bottom: 16px;
+    opacity: 0.3;
+  }
+  .empty-state p {
+    font-size: 0.9rem;
+    letter-spacing: 0.05em;
+  }
+
+  /* ── Timer List ── */
+  .timer-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .timer-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: clamp(10px, 2.5vw, 16px) clamp(10px, 3vw, 20px);
+    display: flex;
+    align-items: center;
+    gap: clamp(6px, 2vw, 14px);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .timer-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--accent);
+    border-radius: 0 2px 2px 0;
+    transition: background 0.3s;
+  }
+  .timer-card.warning {
+    border-color: var(--warn);
+    animation: warnPulse 0.6s ease-in-out infinite;
+  }
+  .timer-card.warning::before {
+    background: var(--warn);
+  }
+  .timer-card.expired {
+    animation: expireFlash 0.5s ease-out forwards;
+  }
+
+  .timer-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .timer-name {
+    font-size: clamp(0.8rem, 3vw, 1.05rem);
+    font-weight: 600;
+    color: #e8e8f0;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 1px;
+  }
+  .timer-card.warning .timer-name {
+    color: var(--warn);
+  }
+
+  .timer-time {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(1.1rem, 5vw, 2rem);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+    transition: color 0.3s;
+    line-height: 1;
+  }
+  .timer-card.warning .timer-time {
+    color: var(--warn);
+    text-shadow: 0 0 20px var(--warn-glow), 0 0 40px var(--warn-glow);
+  }
+
+  .timer-actions {
+    display: flex;
+    align-items: center;
+    gap: clamp(4px, 1.5vw, 8px);
+    flex-shrink: 0;
+  }
+  .btn-delete {
+    background: rgba(255, 23, 68, 0.1);
+    border: 1px solid rgba(255, 23, 68, 0.25);
+    color: #ff5470;
+    width: clamp(28px, 7vw, 34px);
+    height: clamp(28px, 7vw, 34px);
+    border-radius: 6px;
+    font-size: clamp(0.9rem, 2.5vw, 1.2rem);
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+  .btn-delete:hover {
+    color: #fff;
+    background: var(--danger);
+    border-color: var(--danger);
+    box-shadow: 0 0 12px var(--danger-glow);
+  }
+
+  .progress-ring {
+    width: clamp(28px, 8vw, 44px);
+    height: clamp(28px, 8vw, 44px);
+    flex-shrink: 0;
+  }
+  .progress-ring circle {
+    fill: none;
+    stroke-width: clamp(2, 0.6vw, 3);
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1s linear, stroke 0.3s;
+  }
+  .progress-ring .bg {
+    stroke: var(--border);
+  }
+  .progress-ring .fg {
+    stroke: var(--accent);
+    transform: rotate(-90deg);
+    transform-origin: center;
+  }
+  .timer-card.warning .progress-ring .fg {
+    stroke: var(--warn);
+  }
+
+  /* ── Animations ── */
+  @keyframes warnPulse {
+    0%, 100% {
+      box-shadow: 0 0 8px var(--warn-glow), inset 0 0 8px rgba(255, 145, 0, 0.05);
+      transform: scale(1);
+    }
+    50% {
+      box-shadow: 0 0 24px var(--warn-glow), 0 0 48px rgba(255, 145, 0, 0.2), inset 0 0 12px rgba(255, 145, 0, 0.08);
+      transform: scale(1.015);
+    }
+  }
+
+  @keyframes expireFlash {
+    0% {
+      border-color: var(--success);
+      box-shadow: 0 0 30px var(--success-glow);
+      transform: scale(1.02);
+    }
+    60% {
+      border-color: var(--success);
+      box-shadow: 0 0 60px var(--success-glow);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(0.95) translateY(10px);
+      max-height: 0;
+      padding: 0;
+      margin: 0;
+      border-width: 0;
+    }
+  }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface-2);
+    border: 1px solid var(--success);
+    border-radius: 10px;
+    padding: 12px 24px;
+    color: var(--text);
+    font-size: 0.9rem;
+    z-index: 100;
+    animation: toastIn 0.3s ease-out, toastOut 0.3s ease-in 2s forwards;
+    pointer-events: none;
+    box-shadow: 0 8px 32px rgba(0, 230, 118, 0.15);
+  }
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+  @keyframes toastOut {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 480px) {
+    .header h1 { font-size: 1.5rem; }
+    .add-form { flex-direction: column; }
+    .timer-time { font-size: 1.5rem; }
+    .timer-card { padding: 12px 16px; }
+  }
+</style>
+</head>
+<body>
+<!-- Supabase SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+<div class="app">
+  <div class="header">
+    <h1>Lure Gank</h1>
+    <p class="subtitle">白嫖一时爽，一直白嫖一直爽</p>
+  </div>
+
+  <div class="add-form">
+    <div class="field" style="flex: 2;">
+      <label>名称</label>
+      <input type="text" id="inputName" placeholder="例如：海龙王" maxlength="20" autocomplete="off">
+    </div>
+    <div class="field" style="max-width: 80px;">
+      <label>分</label>
+      <input type="number" id="inputMinutes" placeholder="0" min="0" max="120" value="10">
+    </div>
+    <div class="field" style="max-width: 80px;">
+      <label>秒</label>
+      <input type="number" id="inputSeconds" placeholder="0" min="0" max="59" value="0">
+    </div>
+    <button class="btn-add" id="btnAdd" onclick="addTimer()">+ 添加</button>
+  </div>
+
+  <div class="timer-list" id="timerList">
+    <div class="empty-state" id="emptyState">
+      <div class="icon">⏱</div>
+      <p>暂无倒计时，添加一个开始吧</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ====== Supabase 配置（不填则使用本地模式，不跨设备同步）======
+  const SUPABASE_URL = '';
+  const SUPABASE_KEY = '';
+  // ==========================================================
+
+  let supabase = null;
+  let channel = null;
+  let syncEnabled = false;
+  if (SUPABASE_URL && SUPABASE_KEY) {
+    supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    syncEnabled = true;
+  }
+
+  const timers = [];
+  let nextId = Date.now();
+
+  const el = {
+    inputName: document.getElementById('inputName'),
+    inputMinutes: document.getElementById('inputMinutes'),
+    inputSeconds: document.getElementById('inputSeconds'),
+    timerList: document.getElementById('timerList'),
+    emptyState: document.getElementById('emptyState'),
+  };
+
+  function formatTime(seconds) {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  }
+
+  function updateEmptyState() {
+    el.emptyState.style.display = timers.length === 0 ? '' : 'none';
+  }
+
+  // ====== 本地模式：添加定时器 ======
+  async function addTimerLocal(name, totalSeconds) {
+    const timer = {
+      id: nextId++,
+      name,
+      totalSeconds,
+      remaining: totalSeconds,
+      element: null,
+      expired: false,
+    };
+    timers.push(timer);
+    renderAll();
+  }
+
+  // ====== 同步模式：添加定时器到 Supabase ======
+  async function addTimerRemote(name, totalSeconds) {
+    if (!supabase) return;
+    const { error } = await supabase.from('timers').insert({
+      name,
+      total_seconds: totalSeconds,
+      started_at: new Date().toISOString(),
+    });
+    if (error) console.error('添加失败:', error);
+  }
+
+  async function addTimer() {
+    const name = el.inputName.value.trim();
+    const minutes = parseInt(el.inputMinutes.value, 10) || 0;
+    const seconds = parseInt(el.inputSeconds.value, 10) || 0;
+    if (!name) { el.inputName.focus(); return; }
+    const totalSeconds = minutes * 60 + seconds;
+    if (totalSeconds <= 0 || totalSeconds > 7200) { el.inputMinutes.focus(); return; }
+
+    el.inputName.value = '';
+    el.inputMinutes.value = '10';
+    el.inputSeconds.value = '0';
+    el.inputName.focus();
+
+    if (syncEnabled) {
+      await addTimerRemote(name, totalSeconds);
+    } else {
+      addTimerLocal(name, totalSeconds);
+    }
+  }
+
+  // 回车自动添加
+  [el.inputName, el.inputMinutes, el.inputSeconds].forEach(input => {
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); addTimer(); }
+    });
+  });
+
+  // ====== 删除 ======
+  async function deleteTimerRemote(id) {
+    if (!supabase) return;
+    await supabase.from('timers').delete().eq('id', id);
+  }
+
+  function expireAndRemove(timer) {
+    if (timer.expired) return;
+    timer.expired = true;
+    if (syncEnabled) {
+      deleteTimerRemote(timer.id);
+    }
+    timer.element.classList.add('expired');
+    timer.element.addEventListener('animationend', () => {
+      removeTimerById(timer.id);
+    });
+  }
+
+  function removeTimerById(id) {
+    const idx = timers.findIndex(t => t.id === id);
+    if (idx === -1) return;
+    if (timers[idx].element) timers[idx].element.remove();
+    timers.splice(idx, 1);
+    updateEmptyState();
+  }
+
+  // ====== 卡片创建 ======
+  function createCard(timer) {
+    const card = document.createElement('div');
+    card.className = 'timer-card';
+    card.setAttribute('data-id', timer.id);
+
+    const info = document.createElement('div');
+    info.className = 'timer-info';
+    const nameEl = document.createElement('div');
+    nameEl.className = 'timer-name';
+    nameEl.textContent = timer.name;
+    const timeEl = document.createElement('div');
+    timeEl.className = 'timer-time';
+    timeEl.textContent = formatTime(timer.remaining);
+    info.appendChild(nameEl);
+    info.appendChild(timeEl);
+
+    const actions = document.createElement('div');
+    actions.className = 'timer-actions';
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.classList.add('progress-ring');
+    svg.setAttribute('viewBox', '0 0 44 44');
+    const circumference = 2 * Math.PI * 19;
+    const bg = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    bg.classList.add('bg');
+    bg.setAttribute('cx', '22'); bg.setAttribute('cy', '22'); bg.setAttribute('r', '19');
+    const fg = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    fg.classList.add('fg');
+    fg.setAttribute('cx', '22'); fg.setAttribute('cy', '22'); fg.setAttribute('r', '19');
+    fg.setAttribute('stroke-dasharray', circumference);
+    fg.setAttribute('stroke-dashoffset', '0');
+    svg.appendChild(bg);
+    svg.appendChild(fg);
+    actions.appendChild(svg);
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn-delete';
+    delBtn.textContent = '\u00D7';
+    delBtn.title = '删除';
+    delBtn.addEventListener('click', () => expireAndRemove(timer));
+    actions.appendChild(delBtn);
+
+    card.appendChild(info);
+    card.appendChild(actions);
+
+    timer.element = card;
+    timer.nameEl = nameEl;
+    timer.timeEl = timeEl;
+    timer.circle = fg;
+    timer.circumference = circumference;
+    return card;
+  }
+
+  // ====== 渲染 ======
+  function renderAll() {
+    const now = Date.now();
+    for (const timer of timers) {
+      if (timer.expired) continue;
+      if (!timer._start) timer._start = now;
+      const elapsed = Math.floor((now - timer._start) / 1000);
+      timer.remaining = Math.max(0, timer.totalSeconds - elapsed);
+    }
+
+    // 按剩余时间排序
+    timers.sort((a, b) => {
+      if (a.expired && !b.expired) return 1;
+      if (!a.expired && b.expired) return -1;
+      return a.remaining - b.remaining;
+    });
+
+    el.timerList.innerHTML = '';
+
+    for (const timer of timers) {
+      if (!timer.element || timer.element.parentNode !== el.timerList) {
+        timer.element = null;
+      }
+
+      if (timer.expired) {
+        if (timer.element) el.timerList.appendChild(timer.element);
+        continue;
+      }
+
+      if (!timer.element) createCard(timer);
+
+      timer.timeEl.textContent = formatTime(timer.remaining);
+      const progress = timer.totalSeconds > 0 ? timer.remaining / timer.totalSeconds : 0;
+      timer.circle.setAttribute('stroke-dashoffset', timer.circumference * (1 - progress));
+
+      if (timer.remaining <= 30 && timer.remaining > 0) {
+        timer.element.classList.add('warning');
+      } else {
+        timer.element.classList.remove('warning');
+      }
+
+      if (timer.remaining <= 0 && !timer.expired) {
+        timer.expired = true;
+        timer.element.classList.remove('warning');
+        timer.element.classList.add('expired');
+        if (syncEnabled) deleteTimerRemote(timer.id);
+        timer.element.addEventListener('animationend', () => {
+          const idx = timers.findIndex(t => t.id === timer.id);
+          if (idx !== -1) { timers.splice(idx, 1); updateEmptyState(); renderAll(); }
+        }, { once: true });
+        timer.timeEl.textContent = '00:00';
+      }
+
+      el.timerList.appendChild(timer.element);
+    }
+    updateEmptyState();
+  }
+
+  // ====== Supabase 实时同步 ======
+  async function initSync() {
+    if (!syncEnabled) return;
+
+    // 加载已有数据
+    let allRows = [];
+    let rangeStart = 0;
+    const pageSize = 1000;
+    while (true) {
+      const { data, error } = await supabase
+        .from('timers')
+        .select('*')
+        .order('started_at', { ascending: true })
+        .range(rangeStart, rangeStart + pageSize - 1);
+      if (error) { console.error('加载失败:', error); break; }
+      if (!data || data.length === 0) break;
+      allRows = allRows.concat(data);
+      if (data.length < pageSize) break;
+      rangeStart += pageSize;
+    }
+
+    // 转换为本地 timer 对象
+    for (const row of allRows) {
+      const elapsed = Math.floor((Date.now() - new Date(row.started_at).getTime()) / 1000);
+      const remaining = Math.max(0, row.total_seconds - elapsed);
+      const timer = {
+        id: row.id,
+        name: row.name,
+        totalSeconds: row.total_seconds,
+        remaining,
+        _start: new Date(row.started_at).getTime(),
+        element: null,
+        expired: remaining <= 0,
+      };
+      timers.push(timer);
+    }
+    renderAll();
+
+    // 订阅实时变更
+    channel = supabase
+      .channel('timers-changes')
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'timers' },
+        (payload) => {
+          const row = payload.new;
+          const elapsed = Math.floor((Date.now() - new Date(row.started_at).getTime()) / 1000);
+          const remaining = Math.max(0, row.total_seconds - elapsed);
+          // 避免重复添加
+          if (timers.find(t => t.id === row.id)) return;
+          timers.push({
+            id: row.id,
+            name: row.name,
+            totalSeconds: row.total_seconds,
+            remaining,
+            _start: new Date(row.started_at).getTime(),
+            element: null,
+            expired: remaining <= 0,
+          });
+          renderAll();
+        }
+      )
+      .on('postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'timers' },
+        (payload) => {
+          const id = payload.old.id;
+          const idx = timers.findIndex(t => t.id === id);
+          if (idx !== -1) {
+            // 如果不是自己触发的过期，也播放动画
+            if (!timers[idx].expired) {
+              timers[idx].expired = true;
+              if (timers[idx].element) {
+                timers[idx].element.classList.add('expired');
+                timers[idx].element.addEventListener('animationend', () => {
+                  removeTimerById(id);
+                }, { once: true });
+              }
+            } else {
+              removeTimerById(id);
+            }
+          }
+          renderAll();
+        }
+      )
+      .subscribe();
+  }
+
+  // ====== 启动 ======
+  setInterval(renderAll, 1000);
+
+  if (syncEnabled) {
+    initSync();
+  } else {
+    renderAll();
+  }
+
+  el.inputName.focus();
+</script>
+</body>
+</html>
