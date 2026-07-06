@@ -90,24 +90,34 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 14px;
-    padding: clamp(12px, 3vw, 24px);
-    margin-bottom: 28px;
+    padding: clamp(10px, 3vw, 20px);
+    margin-bottom: 20px;
+  }
+  .form-row {
     display: flex;
     gap: 8px;
     align-items: flex-end;
-    flex-wrap: wrap;
+  }
+  .form-row + .form-row {
+    margin-top: 8px;
   }
   .field {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    flex: 1;
+    gap: 3px;
     min-width: 0;
   }
+  .field.name-field {
+    flex: 1;
+  }
+  .field.time-field {
+    flex: 1;
+    max-width: none;
+  }
   .field label {
-    font-size: clamp(0.6rem, 1.8vw, 0.72rem);
+    font-size: clamp(0.6rem, 1.8vw, 0.7rem);
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.08em;
     color: var(--text-dim);
     font-weight: 500;
     white-space: nowrap;
@@ -116,13 +126,18 @@
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: clamp(8px, 2vw, 12px) clamp(8px, 2vw, 14px);
+    padding: 10px clamp(6px, 2vw, 12px);
     color: var(--text);
-    font-size: clamp(0.85rem, 2.5vw, 1rem);
+    font-size: clamp(0.85rem, 3vw, 1rem);
     font-family: 'Orbitron', sans-serif;
     outline: none;
     transition: border-color 0.2s, box-shadow 0.2s;
     width: 100%;
+    text-align: center;
+  }
+  .field.name-field input {
+    text-align: left;
+    font-family: 'Noto Sans SC', sans-serif;
   }
   .field input:focus {
     border-color: var(--accent);
@@ -131,23 +146,24 @@
   .field input::placeholder {
     color: var(--text-dim);
     font-family: 'Noto Sans SC', sans-serif;
-    font-size: 0.8rem;
+    font-size: 0.78rem;
   }
   .btn-add {
     background: linear-gradient(135deg, var(--accent), #00b8d4);
     border: none;
     border-radius: 8px;
-    padding: 0 clamp(14px, 3vw, 28px);
+    padding: 0 16px;
     color: #000;
-    font-size: clamp(0.78rem, 2vw, 0.9rem);
+    font-size: clamp(0.8rem, 2.5vw, 0.9rem);
     font-weight: 700;
     font-family: 'Noto Sans SC', sans-serif;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.04em;
     cursor: pointer;
     transition: transform 0.15s, box-shadow 0.2s;
     white-space: nowrap;
-    height: clamp(36px, 8vw, 44px);
+    height: 40px;
     flex-shrink: 0;
+    min-width: 56px;
   }
   .btn-add:hover {
     transform: translateY(-1px);
@@ -375,19 +391,23 @@
   </div>
 
   <div class="add-form">
-    <div class="field" style="flex: 2;">
-      <label>名称</label>
-      <input type="text" id="inputName" placeholder="例如：海龙王" maxlength="20" autocomplete="off">
+    <div class="form-row">
+      <div class="field name-field">
+        <label>名称</label>
+        <input type="text" id="inputName" placeholder="例如：海龙王" maxlength="20" autocomplete="off">
+      </div>
     </div>
-    <div class="field" style="max-width: 80px;">
-      <label>分</label>
-      <input type="number" id="inputMinutes" placeholder="0" min="0" max="120" value="10">
+    <div class="form-row">
+      <div class="field time-field">
+        <label>分</label>
+        <input type="number" id="inputMinutes" placeholder="0" min="0" max="120" value="10">
+      </div>
+      <div class="field time-field">
+        <label>秒</label>
+        <input type="number" id="inputSeconds" placeholder="0" min="0" max="59" value="0">
+      </div>
+      <button class="btn-add" id="btnAdd" onclick="addTimer()">+ 添加</button>
     </div>
-    <div class="field" style="max-width: 80px;">
-      <label>秒</label>
-      <input type="number" id="inputSeconds" placeholder="0" min="0" max="59" value="0">
-    </div>
-    <button class="btn-add" id="btnAdd" onclick="addTimer()">+ 添加</button>
   </div>
 
   <div class="timer-list" id="timerList">
