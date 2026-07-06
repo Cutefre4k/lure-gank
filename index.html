@@ -417,8 +417,12 @@
 
 <script>
   // ====== WebSocket 实时同步 ======
-  const WS_PORT = 8765;
-  const wsUrl = `ws://${location.hostname}:${WS_PORT}`;
+  // Cloudflare Worker（公网，朋友可访问）→ wss:// 协议
+  // 本地服务器（局域网，电脑运行 server.py）→ ws:// 协议
+  const CLOUDFLARE_WS = 'wss://lure-gank.foul-dust.workers.dev';
+  const LOCAL_WS = `ws://${location.hostname}:8765`;
+  
+  let wsUrl = CLOUDFLARE_WS;  // 默认公网模式
   let ws = null;
   let wsConnected = false;
   let reconnectTimer = null;
