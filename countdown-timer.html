@@ -379,7 +379,6 @@
     .timer-card { padding: 12px 16px; }
   }
 </style>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 </head>
 <body>
 <div class="app">
@@ -417,13 +416,16 @@
 </div>
 
 <script>
-  // ====== Supabase 配置 ======
-  const SUPABASE_URL = 'https://jnhmpcawledzveoqkvgy.supabase.co';
-  const SUPABASE_KEY = 'sb_publishable_TpqUvhRKOiS694mKj3v1bQ_mwbpLeqf';
-  const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-  const TABLE = 'timers';
+  // ====== Supabase REST API（纯 fetch，零 CDN 依赖） ======
+  const REST = 'https://jnhmpcawledzveoqkvgy.supabase.co/rest/v1/timers';
+  const H = {
+    'apikey': 'sb_publishable_TpqUvhRKOiS694mKj3v1bQ_mwbpLeqf',
+    'Authorization': 'Bearer sb_publishable_TpqUvhRKOiS694mKj3v1bQ_mwbpLeqf',
+    'Content-Type': 'application/json', 'Prefer': 'return=representation'
+  };
 
   const timers = [];
+  let lastId = 0;
 
   const el = {
     inputName: document.getElementById('inputName'),
@@ -455,18 +457,24 @@
     el.inputSeconds.value = '0';
     el.inputName.focus();
 
-    const { error } = await supabase.from(TABLE).insert({
-      name, total_seconds: total,
-      started_at: new Date().toISOString(),
-    });
-    if (error) console.error('添加失败:', error);
+    try {
+      const res = await fetch(REST, { method:'POST', headers:H,
+        body: JSON.stringify({ name, total_seconds: total, started_at: new Date().toISOString() }) });
+      if (!res.ok) { console.error('添加失败 HTTP', res.status); return; }
+      const data = await res.json();
+      if (data && data.length) {
+        const row = data[0];
+        if (row.id > lastId) lastId = row.id;
+        if (!timers.find(t => t.id === row.id)) { timers.push(rowToTimer(row)); render(); }
+      }
+    } catch(e) { console.error('添加失败:', e); }
   }
 
   // ====== 删除 ======
   async function delTimer(timer) {
     if (timer.dead) return;
     timer.dead = true;
-    await supabase.from(TABLE).delete().eq('id', timer.id);
+    fetch(REST + '?id=eq.' + timer.id, { method:'DELETE', headers:H }).catch(()=>{});
     timer.el.classList.add('expired');
     timer.el.addEventListener('animationend', () => {
       const idx = timers.findIndex(t => t.id === timer.id);
@@ -556,10 +564,12 @@
 
     timers.sort((a,b) => (a.dead - b.dead) || a.remaining - b.remaining);
 
+    let maxAliveId = 0;
     el.timerList.innerHTML = '';
     for (const t of timers) {
       if (!t.el) buildCard(t);
       if (t.dead) continue;
+      if (t.id > maxAliveId) maxAliveId = t.id;
 
       t.timeEl.textContent = formatTime(t.remaining);
       const p = t.totalSeconds > 0 ? t.remaining / t.totalSeconds : 0;
@@ -571,7 +581,7 @@
         t.dead = true;
         t.el.classList.add('expired');
         t.timeEl.textContent = '00:00';
-        supabase.from(TABLE).delete().eq('id', t.id).then(() => {});
+        fetch(REST + '?id=eq.' + t.id, { method:'DELETE', headers:H }).catch(()=>{});
         t.el.addEventListener('animationend', () => {
           const idx = timers.findIndex(x => x.id === t.id);
           if (idx !== -1) timers.splice(idx, 1);
@@ -581,49 +591,46 @@
       }
       el.timerList.appendChild(t.el);
     }
+    if (maxAliveId > lastId) lastId = maxAliveId;
     updateEmpty();
   }
 
-  // ====== Supabase Realtime 订阅 ======
+  // ====== 轮询同步（每 2 秒拉取新增数据，替代 WebSocket） ======
+  async function sync() {
+    try {
+      const res = await fetch(REST + '?select=*&order=id.asc&id=gt.' + lastId, { headers:H });
+      if (!res.ok) return;
+      const rows = await res.json();
+      if (!rows || !rows.length) return;
+      let changed = false;
+      for (const row of rows) {
+        if (row.id > lastId) lastId = row.id;
+        if (!timers.find(t => t.id === row.id)) {
+          timers.push(rowToTimer(row));
+          changed = true;
+        }
+      }
+      if (changed) render();
+    } catch(e) {}
+  }
+
+  // ====== 初始化：拉取全部数据 ======
   async function init() {
-    // 加载已有数据
-    let rows = [];
-    for (let i = 0; ; i += 1000) {
-      const { data, error } = await supabase.from(TABLE)
-        .select('*').order('started_at', { ascending: true })
-        .range(i, i + 999);
-      if (error) { console.error(error); break; }
-      if (!data || !data.length) break;
-      rows = rows.concat(data);
-      if (data.length < 1000) break;
-    }
-
-    rows.forEach(r => timers.push(rowToTimer(r)));
+    try {
+      const res = await fetch(REST + '?select=*&order=id.asc', { headers:H });
+      if (res.ok) {
+        const rows = await res.json();
+        if (rows && rows.length) {
+          rows.forEach(r => { timers.push(rowToTimer(r)); if (r.id > lastId) lastId = r.id; });
+        }
+      }
+    } catch(e) { console.error('初始化失败:', e); }
     render();
-
-    // 实时订阅 INSERT
-    supabase
-      .channel('lure-gank')
-      .on('postgres_changes',
-        { event: 'INSERT', schema: 'public', table: TABLE },
-        payload => {
-          if (timers.find(t => t.id === payload.new.id)) return;
-          timers.push(rowToTimer(payload.new));
-          render();
-        })
-      .on('postgres_changes',
-        { event: 'DELETE', schema: 'public', table: TABLE },
-        payload => {
-          const t = timers.find(t => t.id === payload.old.id);
-          if (t) t.dead = true;
-          render();
-        })
-      .subscribe();
-
-    console.log('✅ Supabase 实时同步已连接');
+    console.log('✅ REST API 同步就绪（2 秒轮询）');
   }
 
   setInterval(render, 1000);
+  setInterval(sync, 2000);
   init().then(() => el.inputName.focus());
 </script>
 </body>
