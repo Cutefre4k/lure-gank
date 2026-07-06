@@ -595,8 +595,8 @@
     updateEmpty();
   }
 
-  // ====== 轮询同步（每 2 秒拉取新增数据，替代 WebSocket） ======
-  async function sync() {
+  // ====== 轮询同步（每 2 秒拉取新增数据） ======
+  async function syncNew() {
     try {
       const res = await fetch(REST + '?select=*&order=id.asc&id=gt.' + lastId, { headers:H });
       if (!res.ok) return;
@@ -614,6 +614,20 @@
     } catch(e) {}
   }
 
+  // ====== 删除同步（每 5 秒拉全部 ID，清除本地多余项） ======
+  async function syncDeletions() {
+    try {
+      const res = await fetch(REST + '?select=id', { headers:H });
+      if (!res.ok) return;
+      const serverIds = new Set((await res.json()).map(r => r.id));
+      let changed = false;
+      for (const t of timers) {
+        if (!t.dead && !serverIds.has(t.id)) { t.dead = true; changed = true; }
+      }
+      if (changed) render();
+    } catch(e) {}
+  }
+
   // ====== 初始化：拉取全部数据 ======
   async function init() {
     try {
@@ -626,11 +640,12 @@
       }
     } catch(e) { console.error('初始化失败:', e); }
     render();
-    console.log('✅ REST API 同步就绪（2 秒轮询）');
+    console.log('✅ REST API 同步就绪（新增2秒+删除5秒轮询）');
   }
 
   setInterval(render, 1000);
-  setInterval(sync, 2000);
+  setInterval(syncNew, 2000);
+  setInterval(syncDeletions, 5000);
   init().then(() => el.inputName.focus());
 </script>
 </body>
